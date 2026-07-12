@@ -59,7 +59,7 @@ app.post("/api/reports", async (req: Request, res: Response) => {
       utilityType,
       area,
       district,
-      status: "pending",
+      status: "active",
       startedAt: startedAt || new Date().toISOString(),
       shortDescription,
       description,
@@ -136,6 +136,46 @@ app.get("/api/reports/:id", async (req: Request, res: Response) => {
     res.status(200).json(report);
   } catch (error) {
     console.error("Error fetching report by ID:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.put("/api/reports/:id/status", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId, status } = req.body;
+
+    if (!ObjectId.isValid(id) || !userId || !status) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+
+    const report = await reports.findOne({ _id: new ObjectId(id) });
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    if (report.reporterId !== userId) {
+      res.status(403).json({ error: "Only the reporter can update the status" });
+      return;
+    }
+
+    const validStatuses = ["active", "resolved"];
+    if (!validStatuses.includes(status)) {
+      res.status(400).json({ error: "Invalid status" });
+      return;
+    }
+
+    await reports.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { status } }
+    );
+
+    const updated = await reports.findOne({ _id: new ObjectId(id) });
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error("Error updating status:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
