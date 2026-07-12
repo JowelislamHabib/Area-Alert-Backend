@@ -140,6 +140,56 @@ app.get("/api/reports/:id", async (req: Request, res: Response) => {
   }
 });
 
+app.post("/api/reports/:id/vote", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId, voteType } = req.body;
+
+    if (!ObjectId.isValid(id) || !userId || !voteType) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+
+    const report = await reports.findOne({ _id: new ObjectId(id) });
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    const arrayMap: Record<string, string> = { upvote: "upvotes", downvote: "downvotes", resolved: "resolvedVotes" };
+    const target = arrayMap[voteType];
+    
+    if (!target) {
+      res.status(400).json({ error: "Invalid vote type" });
+      return;
+    }
+
+    const hasVoted = report[target]?.includes(userId);
+    const pullFields: any = {};
+    Object.values(arrayMap).forEach((arr: string) => {
+      if (arr !== target) pullFields[arr] = userId;
+    });
+
+    if (hasVoted) {
+      // Toggle off
+      pullFields[target] = userId;
+      await reports.updateOne({ _id: new ObjectId(id) }, { $pull: pullFields });
+    } else {
+      // Toggle on: remove from others, add to target
+      if (Object.keys(pullFields).length > 0) {
+        await reports.updateOne({ _id: new ObjectId(id) }, { $pull: pullFields });
+      }
+      await reports.updateOne({ _id: new ObjectId(id) }, { $addToSet: { [target]: userId } });
+    }
+
+    const updated = await reports.findOne({ _id: new ObjectId(id) });
+    res.status(200).json(updated);
+  } catch (error) {
+    console.error("Error voting:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
