@@ -32,10 +32,19 @@ app.post("/api/reports", async (req: Request, res: Response) => {
       reporterName,
       startedAt,
       image,
+      videoUrl,
       ispName,
     } = req.body;
 
-    if (!utilityType || !area || !district || !shortDescription || !description || !reporterId || !reporterName) {
+    if (
+      !utilityType ||
+      !area ||
+      !district ||
+      !shortDescription ||
+      !description ||
+      !reporterId ||
+      !reporterName
+    ) {
       res.status(400).json({ error: "Missing required fields" });
       return;
     }
@@ -55,7 +64,8 @@ app.post("/api/reports", async (req: Request, res: Response) => {
       shortDescription,
       description,
       image: image || null,
-      ispName: utilityType === "internet" ? (ispName || null) : null,
+      videoUrl: videoUrl || null,
+      ispName: utilityType === "internet" ? ispName || null : null,
       reporterId,
       reporterName,
       createdAt: new Date().toISOString(),
@@ -69,6 +79,63 @@ app.post("/api/reports", async (req: Request, res: Response) => {
     res.status(201).json({ ...doc, _id: result.insertedId.toString() });
   } catch (error) {
     console.error("Error creating report:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/reports", async (req: Request, res: Response) => {
+  try {
+    const { district, area, utilityType, sortBy = "newest" } = req.query;
+
+    const query: any = {};
+    if (district) query.district = district;
+    if (area) query.area = area;
+    if (utilityType) query.utilityType = utilityType;
+
+    let sortOption: any = { createdAt: -1 };
+    if (sortBy === "most_upvoted") {
+      const pipeline: any[] = [
+        { $match: query },
+        {
+          $addFields: {
+            upvotesCount: { $size: { $ifNull: ["$upvotes", []] } },
+          },
+        },
+        { $sort: { upvotesCount: -1, createdAt: -1 } },
+        { $project: { upvotesCount: 0 } },
+      ];
+
+      const results = await reports.aggregate(pipeline).toArray();
+      res.status(200).json(results);
+      return;
+    }
+
+    const results = await reports.find(query).sort(sortOption).toArray();
+    res.status(200).json(results);
+  } catch (error) {
+    console.error("Error fetching reports:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.get("/api/reports/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      res.status(400).json({ error: "Invalid ID format" });
+      return;
+    }
+
+    const report = await reports.findOne({ _id: new ObjectId(id) });
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    res.status(200).json(report);
+  } catch (error) {
+    console.error("Error fetching report by ID:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -104,5 +171,3 @@ run().catch(console.dir);
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
-
-
