@@ -85,12 +85,29 @@ app.post("/api/reports", async (req: Request, res: Response) => {
 
 app.get("/api/reports", async (req: Request, res: Response) => {
   try {
-    const { district, area, utilityType, sortBy = "newest" } = req.query;
+    const { district, area, utilityType, sortBy = "newest", status, startDate, endDate, q } = req.query;
 
     const query: any = {};
     if (district) query.district = district;
     if (area) query.area = area;
     if (utilityType) query.utilityType = utilityType;
+    if (status && status !== "all") query.status = status;
+    
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = startDate;
+      if (endDate) query.createdAt.$lte = endDate;
+    }
+    
+    if (q) {
+      const searchRegex = { $regex: q as string, $options: "i" };
+      query.$or = [
+        { area: searchRegex },
+        { district: searchRegex },
+        { shortDescription: searchRegex },
+        { description: searchRegex }
+      ];
+    }
 
     let sortOption: any = { createdAt: -1 };
     if (sortBy === "most_upvoted") {
