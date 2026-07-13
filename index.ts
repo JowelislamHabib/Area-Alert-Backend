@@ -148,7 +148,7 @@ app.get("/api/reports", async (req: Request, res: Response) => {
 });
 app.get("/api/reports/safety-stats", async (req: Request, res: Response) => {
   try {
-    const { type = "districts", q, utilityType, district, page = "1", limit = "12" } = req.query;
+    const { type = "districts", q, utilityType, district, safetyLevel, page = "1", limit = "12" } = req.query;
     
     const pageNum = parseInt(page as string) || 1;
     const limitNum = parseInt(limit as string) || 12;
@@ -218,6 +218,11 @@ app.get("/api/reports/safety-stats", async (req: Request, res: Response) => {
           { "_id.area": searchRegex }
         ];
       }
+    }
+
+    if (safetyLevel && safetyLevel !== "all") {
+      const levelString = safetyLevel as string;
+      searchMatchStage.safetyLevel = levelString.charAt(0).toUpperCase() + levelString.slice(1).toLowerCase();
     }
 
     const formatStage = {
