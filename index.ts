@@ -34,6 +34,7 @@ app.post("/api/reports", async (req: Request, res: Response) => {
       image,
       videoUrl,
       ispName,
+      reporterImage,
     } = req.body;
 
     if (
@@ -60,7 +61,7 @@ app.post("/api/reports", async (req: Request, res: Response) => {
       area,
       district,
       status: "active",
-      startedAt: startedAt || new Date().toISOString(),
+      startedAt: startedAt ? new Date(startedAt) : new Date(),
       shortDescription,
       description,
       image: image || null,
@@ -68,7 +69,8 @@ app.post("/api/reports", async (req: Request, res: Response) => {
       ispName: utilityType === "internet" ? ispName || null : null,
       reporterId,
       reporterName,
-      createdAt: new Date().toISOString(),
+      reporterImage: reporterImage || null,
+      createdAt: new Date(),
       upvotes: [],
       downvotes: [],
       resolvedVotes: [],
@@ -96,6 +98,7 @@ app.get("/api/reports", async (req: Request, res: Response) => {
     if (area) query.area = area;
     if (utilityType) query.utilityType = utilityType;
     if (status && status !== "all") query.status = status;
+    if (req.query.reporterId) query.reporterId = req.query.reporterId;
     
     if (startDate || endDate) {
       query.createdAt = {};
@@ -252,6 +255,81 @@ app.post("/api/reports/:id/vote", async (req: Request, res: Response) => {
     res.status(200).json(updated);
   } catch (error) {
     console.error("Error voting:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.delete("/api/reports/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body; // or req.query depending on how it's sent. Let's use req.body.
+
+    if (!ObjectId.isValid(id) || !userId) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+
+    const report = await reports.findOne({ _id: new ObjectId(id) });
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    if (report.reporterId !== userId) {
+      res.status(403).json({ error: "Only the reporter can delete this report" });
+      return;
+    }
+
+    await reports.deleteOne({ _id: new ObjectId(id) });
+    res.status(200).json({ success: true, message: "Report deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting report:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.patch("/api/reports/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId, shortDescription, description, image, videoUrl, status } = req.body;
+
+    if (!ObjectId.isValid(id) || !userId) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+
+    const report = await reports.findOne({ _id: new ObjectId(id) });
+    if (!report) {
+      res.status(404).json({ error: "Report not found" });
+      return;
+    }
+
+    if (report.reporterId !== userId) {
+      res.status(403).json({ error: "Only the reporter can update this report" });
+      return;
+    }
+
+    const updateFields: any = {};
+    if (shortDescription !== undefined) updateFields.shortDescription = shortDescription;
+    if (description !== undefined) updateFields.description = description;
+    if (image !== undefined) updateFields.image = image;
+    if (videoUrl !== undefined) updateFields.videoUrl = videoUrl;
+    if (status !== undefined) updateFields.status = status;
+
+    if (Object.keys(updateFields).length === 0) {
+      res.status(400).json({ error: "No fields to update" });
+      return;
+    }
+
+    await reports.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: updateFields }
+    );
+
+    const updated = await reports.findOne({ _id: new ObjectId(id) });
+    res.status(200).json({ success: true, report: updated });
+  } catch (error) {
+    console.error("Error updating report:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
