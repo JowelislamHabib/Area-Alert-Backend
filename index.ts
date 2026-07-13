@@ -146,6 +146,156 @@ app.get("/api/reports", async (req: Request, res: Response) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+app.get("/api/reports/safety-stats", async (req: Request, res: Response) => {
+  try {
+    const { type = "districts", q, utilityType, district, page = "1", limit = "12" } = req.query;
+    
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 12;
+    const skip = (pageNum - 1) * limitNum;
+
+    const initialMatch: any = {};
+    if (utilityType && utilityType !== "all") {
+      initialMatch.utilityType = utilityType;
+    }
+
+    const groupStage = {
+      $group: {
+        _id: type === "districts" ? "$district" : { district: "$district", area: "$area" },
+        totalReports: { $sum: 1 },
+        activeReports: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } },
+        resolvedReports: { $sum: { $cond: [{ $eq: ["$status", "resolved"] }, 1, 0] } },
+        activeElectricity: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "electricity"] }] }, 1, 0] } },
+        activeWater: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "water"] }] }, 1, 0] } },
+        activeGas: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "gas"] }] }, 1, 0] } },
+        activeInternet: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "internet"] }] }, 1, 0] } }
+      }
+    };
+
+    const addScoreStage = {
+      $addFields: {
+        score: {
+          $cond: [
+            { $eq: ["$totalReports", 0] },
+            100,
+            {
+              $round: [
+                { $subtract: [100, { $multiply: [{ $divide: ["$activeReports", "$totalReports"] }, 100] }] },
+                0
+              ]
+            }
+          ]
+        }
+      }
+    };
+    
+    const addSafetyLevelStage = {
+      $addFields: {
+        safetyLevel: {
+          $switch: {
+            branches: [
+              { case: { $lt: ["$score", 50] }, then: "Avoid" },
+              { case: { $lt: ["$score", 80] }, then: "Caution" }
+            ],
+            default: "Safe"
+          }
+        }
+      }
+    };
+
+    const searchMatchStage: any = {};
+    if (district && type === "areas") {
+      searchMatchStage["_id.district"] = district;
+    }
+
+    if (q) {
+      const searchRegex = { $regex: q as string, $options: "i" };
+      if (type === "districts") {
+        searchMatchStage["_id"] = searchRegex;
+      } else {
+        searchMatchStage["$or"] = [
+          { "_id.district": searchRegex },
+          { "_id.area": searchRegex }
+        ];
+      }
+    }
+
+    const formatStage = {
+      $project: {
+        _id: 0,
+        district: type === "districts" ? "$_id" : "$_id.district",
+        area: type === "districts" ? "$$REMOVE" : "$_id.area",
+        name: type === "districts" ? "$_id" : "$_id.area",
+        totalReports: 1,
+        activeReports: 1,
+        resolvedReports: 1,
+        score: 1,
+        safetyLevel: 1,
+        activeUtilities: {
+          electricity: "$activeElectricity",
+          water: "$activeWater",
+          gas: "$activeGas",
+          internet: "$activeInternet"
+        }
+      }
+    };
+
+    const pipeline: any[] = [];
+    if (Object.keys(initialMatch).length > 0) pipeline.push({ $match: initialMatch });
+    pipeline.push(groupStage);
+    pipeline.push(addScoreStage);
+    pipeline.push(addSafetyLevelStage);
+    if (Object.keys(searchMatchStage).length > 0) pipeline.push({ $match: searchMatchStage });
+
+    pipeline.push({
+      $facet: {
+        metadata: [{ $count: "total" }],
+        data: [
+          { $sort: { score: -1, activeReports: -1 } },
+          { $skip: skip },
+          { $limit: limitNum },
+          formatStage
+        ],
+        overview: [
+          {
+            $group: {
+              _id: null,
+              safeCount: { $sum: { $cond: [{ $gte: ["$score", 80] }, 1, 0] } },
+              activeCount: { $sum: { $cond: [{ $gt: ["$activeReports", 0] }, 1, 0] } },
+              activeOutages: { $sum: "$activeReports" }
+            }
+          }
+        ]
+      }
+    });
+
+    const results = await reports.aggregate(pipeline).toArray();
+    
+    const total = results[0].metadata[0]?.total || 0;
+    const statsData = results[0].data;
+    const totalPages = Math.ceil(total / limitNum);
+
+    let overview = { safeCount: 0, activeCount: 0, activeOutages: 0 };
+    if (results[0].overview[0]) {
+      overview = {
+        safeCount: results[0].overview[0].safeCount,
+        activeCount: results[0].overview[0].activeCount,
+        activeOutages: results[0].overview[0].activeOutages
+      };
+    }
+
+    res.status(200).json({ 
+      stats: statsData, 
+      totalPages, 
+      currentPage: pageNum, 
+      total,
+      overview 
+    });
+  } catch (error) {
+    console.error("Error fetching safety stats:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 app.get("/api/reports/:id", async (req: Request, res: Response) => {
   try {
