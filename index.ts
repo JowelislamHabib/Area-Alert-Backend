@@ -85,7 +85,11 @@ app.post("/api/reports", async (req: Request, res: Response) => {
 
 app.get("/api/reports", async (req: Request, res: Response) => {
   try {
-    const { district, area, utilityType, sortBy = "newest", status, startDate, endDate, q } = req.query;
+    const { district, area, utilityType, sortBy = "newest", status, startDate, endDate, q, page = "1", limit = "12" } = req.query;
+
+    const pageNum = parseInt(page as string) || 1;
+    const limitNum = parseInt(limit as string) || 12;
+    const skip = (pageNum - 1) * limitNum;
 
     const query: any = {};
     if (district) query.district = district;
@@ -109,6 +113,9 @@ app.get("/api/reports", async (req: Request, res: Response) => {
       ];
     }
 
+    const total = await reports.countDocuments(query);
+    const totalPages = Math.ceil(total / limitNum);
+
     let sortOption: any = { createdAt: -1 };
     if (sortBy === "most_upvoted") {
       const pipeline: any[] = [
@@ -119,16 +126,18 @@ app.get("/api/reports", async (req: Request, res: Response) => {
           },
         },
         { $sort: { upvotesCount: -1, createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limitNum },
         { $project: { upvotesCount: 0 } },
       ];
 
       const results = await reports.aggregate(pipeline).toArray();
-      res.status(200).json(results);
+      res.status(200).json({ reports: results, totalPages, currentPage: pageNum, total });
       return;
     }
 
-    const results = await reports.find(query).sort(sortOption).toArray();
-    res.status(200).json(results);
+    const results = await reports.find(query).sort(sortOption).skip(skip).limit(limitNum).toArray();
+    res.status(200).json({ reports: results, totalPages, currentPage: pageNum, total });
   } catch (error) {
     console.error("Error fetching reports:", error);
     res.status(500).json({ error: "Internal server error" });
