@@ -4,9 +4,9 @@
   "description": "",
   "main": "dist/index.js",
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "node api/index.js",
     "dev": "tsx watch index.ts",
-    "build": "tsc",
+    "build": "esbuild index.ts --bundle --platform=node --outfile=api/index.js --external:express --external:cors --external:mongodb --external:dotenv",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -20,12 +20,13 @@
     "jose": "^6.2.3",
     "mongodb": "^7.2.0",
     "ts-node": "^10.9.2",
-    "vercel": "^54.17.3"
+    "vercel": "^56.1.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.1.1",
+    "esbuild": "^0.28.1",
     "tsx": "^4.23.0",
     "typescript": "^7.0.2"
   }

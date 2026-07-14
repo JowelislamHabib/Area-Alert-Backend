@@ -21,12 +21,12 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const dotenv = require("dotenv");
 dotenv.config();
 
-const uri = process.env.MONGODB_URI;
+const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
 app.use(express.json());
 app.use(
   cors({
     credentials: true,
-    origin: [process.env.CLIENT_URL],
+    origin: [process.env.CLIENT_URL || "http://localhost:3000"],
   }),
 );
 
@@ -47,7 +47,7 @@ async function isAdmin(userId: string): Promise<boolean> {
 }
 
 const JWKS = createRemoteJWKSet(
-  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
+  new URL(`${process.env.CLIENT_URL || "http://localhost:3000"}/api/auth/jwks`),
 );
 
 const verifyToken = async (
@@ -791,8 +791,10 @@ async function run() {
 }
 run().catch(console.dir);
 
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
-});
+if (process.env.NODE_ENV !== "production") {
+  app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`);
+  });
+}
 
-export default app;
+module.exports = app;
