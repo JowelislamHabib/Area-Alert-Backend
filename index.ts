@@ -1,4 +1,13 @@
-import express, { type Express, type Request, type Response } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any;
+    }
+  }
+}
 
 const app: Express = express();
 const port = process.env.PORT || 8000;
@@ -19,9 +28,12 @@ app.use(
 // Helper to check if a user is an admin
 async function isAdmin(userId: string): Promise<boolean> {
   try {
-    const user = await db.collection("user").findOne({ 
-      $or: [{ _id: userId }, { id: userId }] 
-    });
+    const query: any = { id: userId };
+    if (ObjectId.isValid(userId)) {
+      query.$or = [{ _id: new ObjectId(userId) }, { id: userId }];
+      delete query.id;
+    }
+    const user = await db.collection("user").findOne(query);
     return user?.role === "admin";
   } catch (error) {
     console.error("Error checking admin status:", error);
@@ -29,11 +41,54 @@ async function isAdmin(userId: string): Promise<boolean> {
   }
 }
 
+const JWKS = createRemoteJWKSet(
+  new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+);
+
+const verifyToken = async (req: Request, res: Response, next: NextFunction): Promise<any> => {
+  const authHeader = req.headers.authorization;
+  console.log("verifyToken -> authHeader:", authHeader);
+  if (!authHeader || !authHeader.startsWith("Bearer")) {
+    return res.status(401).json({ msg: "Unauthorized: Missing or invalid Bearer token" });
+  }
+
+  const token = authHeader.split(" ")[1];
+  console.log("verifyToken -> token:", token);
+  if (!token || token === "null" || token === "undefined") {
+    return res.status(401).json({ msg: "Unauthorized: Token is missing or null" });
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    req.user = payload.session || payload.user || payload;
+    console.log("verifyToken -> req.user:", req.user);
+    next();
+  } catch (error) {
+    console.error("JWT Verification Error:", error);
+    return res.status(401).json({ msg: "Unauthorized: JWT verification failed", error: (error as Error).message });
+  }
+};
+
+const verifyAdmin = (req: Request, res: Response, next: NextFunction): any => {
+  if (req.user?.role !== "admin") {
+    return res.status(403).json({ msg: "Forbidden - Requires Admin Role" });
+  }
+  next();
+};
+
+const verifyReporter = (req: Request, res: Response, next: NextFunction): any => {
+  const role = req.user?.role || "user";
+  if (role !== "user" && role !== "admin") {
+    return res.status(403).json({ msg: "Forbidden - Requires Reporter Role" });
+  }
+  next();
+};
+
 app.get("/", (req: Request, res: Response) => {
   res.send("Hello World!");
 });
 
-app.post("/api/reports", async (req: Request, res: Response) => {
+app.post("/api/reports", verifyToken, verifyReporter, async (req: Request, res: Response) => {
   try {
     const {
       utilityType,
@@ -337,7 +392,7 @@ app.get("/api/reports/:id", async (req: Request, res: Response) => {
   }
 });
 
-app.put("/api/reports/:id/status", async (req: Request, res: Response) => {
+app.put("/api/reports/:id/status", verifyToken, verifyReporter, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { userId, status } = req.body;
@@ -380,7 +435,7 @@ app.put("/api/reports/:id/status", async (req: Request, res: Response) => {
   }
 });
 
-app.post("/api/reports/:id/vote", async (req: Request, res: Response) => {
+app.post("/api/reports/:id/vote", verifyToken, verifyReporter, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { userId, voteType } = req.body;
@@ -430,7 +485,7 @@ app.post("/api/reports/:id/vote", async (req: Request, res: Response) => {
   }
 });
 
-app.delete("/api/reports/:id", async (req: Request, res: Response) => {
+app.delete("/api/reports/:id", verifyToken, verifyReporter, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { userId } = req.body; // or req.query depending on how it's sent. Let's use req.body.
@@ -462,7 +517,7 @@ app.delete("/api/reports/:id", async (req: Request, res: Response) => {
   }
 });
 
-app.patch("/api/reports/:id", async (req: Request, res: Response) => {
+app.patch("/api/reports/:id", verifyToken, verifyReporter, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { userId, shortDescription, description, image, videoUrl, status } = req.body;
