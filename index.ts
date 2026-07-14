@@ -16,6 +16,19 @@ app.use(
   }),
 );
 
+// Helper to check if a user is an admin
+async function isAdmin(userId: string): Promise<boolean> {
+  try {
+    const user = await db.collection("user").findOne({ 
+      $or: [{ _id: userId }, { id: userId }] 
+    });
+    return user?.role === "admin";
+  } catch (error) {
+    console.error("Error checking admin status:", error);
+    return false;
+  }
+}
+
 app.get("/", (req: Request, res: Response) => {
   res.send("Hello World!");
 });
@@ -341,8 +354,11 @@ app.put("/api/reports/:id/status", async (req: Request, res: Response) => {
     }
 
     if (report.reporterId !== userId) {
-      res.status(403).json({ error: "Only the reporter can update the status" });
-      return;
+      const isUserAdmin = await isAdmin(userId);
+      if (!isUserAdmin) {
+        res.status(403).json({ error: "Only the reporter or an admin can update the status" });
+        return;
+      }
     }
 
     const validStatuses = ["active", "resolved"];
@@ -431,8 +447,11 @@ app.delete("/api/reports/:id", async (req: Request, res: Response) => {
     }
 
     if (report.reporterId !== userId) {
-      res.status(403).json({ error: "Only the reporter can delete this report" });
-      return;
+      const isUserAdmin = await isAdmin(userId);
+      if (!isUserAdmin) {
+        res.status(403).json({ error: "Only the reporter or an admin can delete this report" });
+        return;
+      }
     }
 
     await reports.deleteOne({ _id: new ObjectId(id) });
@@ -460,8 +479,11 @@ app.patch("/api/reports/:id", async (req: Request, res: Response) => {
     }
 
     if (report.reporterId !== userId) {
-      res.status(403).json({ error: "Only the reporter can update this report" });
-      return;
+      const isUserAdmin = await isAdmin(userId);
+      if (!isUserAdmin) {
+        res.status(403).json({ error: "Only the reporter or an admin can update this report" });
+        return;
+      }
     }
 
     const updateFields: any = {};
