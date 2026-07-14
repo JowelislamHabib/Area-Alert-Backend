@@ -118,7 +118,7 @@ app.post("/api/reports", verifyToken, verifyReporter, async (req: Request, res: 
       return;
     }
 
-    const validUtilityTypes = ["electricity", "internet", "water", "gas"];
+    const validUtilityTypes = ["electricity", "internet", "water", "gas", "flood"];
     if (!validUtilityTypes.includes(utilityType)) {
       res.status(400).json({ error: "Invalid utilityType" });
       return;
@@ -236,7 +236,8 @@ app.get("/api/reports/safety-stats", async (req: Request, res: Response) => {
         activeElectricity: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "electricity"] }] }, 1, 0] } },
         activeWater: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "water"] }] }, 1, 0] } },
         activeGas: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "gas"] }] }, 1, 0] } },
-        activeInternet: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "internet"] }] }, 1, 0] } }
+        activeInternet: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "internet"] }] }, 1, 0] } },
+        activeFlood: { $sum: { $cond: [{ $and: [{ $eq: ["$status", "active"] }, { $eq: ["$utilityType", "flood"] }] }, 1, 0] } }
       }
     };
 
@@ -308,7 +309,8 @@ app.get("/api/reports/safety-stats", async (req: Request, res: Response) => {
           electricity: "$activeElectricity",
           water: "$activeWater",
           gas: "$activeGas",
-          internet: "$activeInternet"
+          internet: "$activeInternet",
+          flood: "$activeFlood"
         }
       }
     };
