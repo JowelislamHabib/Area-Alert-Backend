@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://area-alert-bd.vercel.app">
+  <a href="https://area-alert-service.vercel.app/">
     <img src="https://img.shields.io/badge/Live_API-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Live API" />
   </a>
   <img src="https://img.shields.io/badge/Express_5-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express 5" />
