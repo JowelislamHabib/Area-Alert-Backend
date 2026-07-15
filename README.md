@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://area-alert-service.vercel.app/">
+  <a href="https://area-alert-server.vercel.app/">
     <img src="https://img.shields.io/badge/Live_API-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Live API" />
   </a>
   <img src="https://img.shields.io/badge/Express_5-000000?style=for-the-badge&logo=express&logoColor=white" alt="Express 5" />
@@ -101,17 +101,18 @@ npm start       # runs the compiled output
 
 Base path: `/api/reports`
 
-| Method | Path                        | Auth | Description                                           |
-| ------ | --------------------------- | ---- | ----------------------------------------------------- |
-| GET    | `/`                         | No   | Health check — returns "Hello World!"                 |
-| GET    | `/api/reports`              | No   | List reports (paginated, filterable, sortable)        |
-| GET    | `/api/reports/safety-stats` | No   | Aggregation pipeline — safety scores by district/area |
-| GET    | `/api/reports/:id`          | No   | Get single report by ObjectId                         |
-| POST   | `/api/reports`              | Yes  | Create a new report                                   |
-| PUT    | `/api/reports/:id/status`   | Yes  | Update report status (active/resolved)                |
-| PATCH  | `/api/reports/:id`          | Yes  | Partial update (description, image, etc.)             |
-| DELETE | `/api/reports/:id`          | Yes  | Delete a report                                       |
-| POST   | `/api/reports/:id/vote`     | Yes  | Toggle upvote/downvote/resolved vote                  |
+| Method | Path                        | Auth        | Description                                           |
+| ------ | --------------------------- | ----------- | ----------------------------------------------------- |
+| GET    | `/`                         | No          | Health check — renders HTML landing page              |
+| GET    | `/api/reports`              | No          | List reports (paginated, filterable, sortable)        |
+| GET    | `/api/reports/safety-stats` | No          | Aggregation pipeline — safety scores by district/area |
+| GET    | `/api/reports/:id`          | No          | Get single report by ObjectId                         |
+| POST   | `/api/reports`              | Yes         | Create a new report                                   |
+| PUT    | `/api/reports/:id/status`   | Yes         | Update report status (active/resolved)                |
+| PATCH  | `/api/reports/:id`          | Yes         | Partial update (description, image, etc.)             |
+| DELETE | `/api/reports/:id`          | Yes         | Delete a report                                       |
+| POST   | `/api/reports/:id/vote`     | Yes         | Toggle upvote/downvote/resolved vote                  |
+| GET    | `/api/admin/users-stats`    | Yes (admin) | Paginated user list with report counts per user       |
 
 ### Query Parameters (GET /api/reports)
 
@@ -221,7 +222,13 @@ Deployed on Vercel as a serverless function.
 ```json
 {
   "builds": [{ "src": "api/index.js", "use": "@vercel/node" }],
-  "routes": [{ "src": "/(.*)", "dest": "api/index.js" }]
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "api/index.js",
+      "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    }
+  ]
 }
 ```
 
@@ -241,11 +248,11 @@ Deployed on Vercel as a serverless function.
 
 ## Scripts
 
-| Command         | What It Does                                                       |
-| --------------- | ------------------------------------------------------------------ |
-| `npm run dev`   | `tsx watch index.ts` — hot-reload dev server                       |
-| `npm run build` | `esbuild index.ts --bundle --platform=node --outfile=api/index.js` |
-| `npm start`     | `node api/index.js` — runs compiled output                         |
+| Command         | What It Does                                                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run dev`   | `tsx watch index.ts` — hot-reload dev server                                                                                               |
+| `npm run build` | `esbuild index.ts --bundle --platform=node --outfile=api/index.js --external:express --external:cors --external:mongodb --external:dotenv` |
+| `npm start`     | `node api/index.js` — runs compiled output                                                                                                 |
 
 ---
 
