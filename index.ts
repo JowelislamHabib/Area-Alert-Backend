@@ -530,6 +530,8 @@ app.get("/api/reports/safety-stats", async (req: Request, res: Response) => {
                 $sum: { $cond: [{ $gt: ["$activeReports", 0] }, 1, 0] },
               },
               activeOutages: { $sum: "$activeReports" },
+              resolvedOutages: { $sum: "$resolvedReports" },
+              totalReports: { $sum: "$totalReports" },
             },
           },
         ],
@@ -542,12 +544,14 @@ app.get("/api/reports/safety-stats", async (req: Request, res: Response) => {
     const statsData = results[0].data;
     const totalPages = Math.ceil(total / limitNum);
 
-    let overview = { safeCount: 0, activeCount: 0, activeOutages: 0 };
+    let overview = { safeCount: 0, activeCount: 0, activeOutages: 0, resolvedOutages: 0, totalReports: 0 };
     if (results[0].overview[0]) {
       overview = {
         safeCount: results[0].overview[0].safeCount,
         activeCount: results[0].overview[0].activeCount,
         activeOutages: results[0].overview[0].activeOutages,
+        resolvedOutages: results[0].overview[0].resolvedOutages,
+        totalReports: results[0].overview[0].totalReports,
       };
     }
 
@@ -798,6 +802,99 @@ app.patch(
       res.status(500).json({ error: "Internal server error" });
     }
   },
+);
+
+app.get(
+  "/api/admin/users-stats",
+  verifyToken,
+  verifyAdmin,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = req.query.search as string;
+      const sortBy = (req.query.sortBy as string) || "createdAt";
+      const sortDirection = req.query.sortDirection === "asc" ? 1 : -1;
+      
+      const skip = (page - 1) * limit;
+
+      const usersCollection = db.collection("user");
+      
+      const matchStage: any = {};
+      if (search) {
+        matchStage.$or = [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+        ];
+      }
+
+      const pipeline: any[] = [];
+      
+      if (Object.keys(matchStage).length > 0) {
+        pipeline.push({ $match: matchStage });
+      }
+
+      pipeline.push({
+        $lookup: {
+          from: "reports",
+          let: { userIdStr: "$id", userObjectIdStr: { $toString: "$_id" } },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ["$reporterId", "$$userIdStr"] },
+                    { $eq: ["$reporterId", "$$userObjectIdStr"] }
+                  ]
+                }
+              }
+            }
+          ],
+          as: "userReports"
+        }
+      });
+
+      pipeline.push({
+        $addFields: {
+          reportCount: { $size: "$userReports" }
+        }
+      });
+
+      pipeline.push({
+        $project: {
+          userReports: 0
+        }
+      });
+
+      const sortStage: any = {};
+      sortStage[sortBy] = sortDirection;
+      if (sortBy !== "createdAt") sortStage["createdAt"] = -1;
+      
+      pipeline.push({ $sort: sortStage });
+      
+      pipeline.push({
+        $facet: {
+          metadata: [{ $count: "total" }],
+          data: [{ $skip: skip }, { $limit: limit }]
+        }
+      });
+
+      const result = await usersCollection.aggregate(pipeline).toArray();
+      const total = result[0]?.metadata[0] ? result[0].metadata[0].total : 0;
+      const data = result[0]?.data || [];
+
+      res.status(200).json({
+        success: true,
+        users: data,
+        total,
+        page,
+        totalPages: Math.ceil(total / limit)
+      });
+    } catch (error) {
+      console.error("Error fetching user stats:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
 );
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
