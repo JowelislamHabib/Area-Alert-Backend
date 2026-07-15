@@ -56,7 +56,6 @@ const verifyToken = async (
   next: NextFunction,
 ): Promise<any> => {
   const authHeader = req.headers.authorization;
-  console.log("verifyToken -> authHeader:", authHeader);
   if (!authHeader || !authHeader.startsWith("Bearer")) {
     return res
       .status(401)
@@ -64,7 +63,6 @@ const verifyToken = async (
   }
 
   const token = authHeader.split(" ")[1];
-  console.log("verifyToken -> token:", token);
   if (!token || token === "null" || token === "undefined") {
     return res
       .status(401)
@@ -74,7 +72,6 @@ const verifyToken = async (
   try {
     const { payload } = await jwtVerify(token, JWKS);
     req.user = payload.session || payload.user || payload;
-    console.log("verifyToken -> req.user:", req.user);
     next();
   } catch (error) {
     console.error("JWT Verification Error:", error);
