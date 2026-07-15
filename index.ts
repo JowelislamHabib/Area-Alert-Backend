@@ -78,12 +78,10 @@ const verifyToken = async (
     next();
   } catch (error) {
     console.error("JWT Verification Error:", error);
-    return res
-      .status(401)
-      .json({
-        msg: "Unauthorized: JWT verification failed",
-        error: (error as Error).message,
-      });
+    return res.status(401).json({
+      msg: "Unauthorized: JWT verification failed",
+      error: (error as Error).message,
+    });
   }
 };
 
@@ -107,7 +105,52 @@ const verifyReporter = (
 };
 
 app.get("/", (req: Request, res: Response) => {
-  res.send("Hello World!");
+  const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AreaAlert API</title>
+  <link rel="icon" type="image/png" href="${clientUrl}/areaalert-favicon.png">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f8fafc;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+    }
+    img {
+      max-width: min(280px, 80vw);
+      height: auto;
+    }
+    h1 {
+      margin-top: 1.5rem;
+      font-size: clamp(1.25rem, 3vw, 1.75rem);
+      color: #1e293b;
+      font-weight: 600;
+    }
+    p {
+      margin-top: 0.5rem;
+      color: #64748b;
+      font-size: clamp(0.875rem, 2vw, 1rem);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="${clientUrl}/areaalert-logo.png" alt="AreaAlert">
+    <p>Community Utility Outage & Service Status Platform</p>
+  </div>
+</body>
+</html>`);
 });
 
 app.post(
@@ -566,11 +609,9 @@ app.put(
       if (report.reporterId !== userId) {
         const isUserAdmin = await isAdmin(userId);
         if (!isUserAdmin) {
-          res
-            .status(403)
-            .json({
-              error: "Only the reporter or an admin can update the status",
-            });
+          res.status(403).json({
+            error: "Only the reporter or an admin can update the status",
+          });
           return;
         }
       }
@@ -683,11 +724,9 @@ app.delete(
       if (report.reporterId !== userId) {
         const isUserAdmin = await isAdmin(userId);
         if (!isUserAdmin) {
-          res
-            .status(403)
-            .json({
-              error: "Only the reporter or an admin can delete this report",
-            });
+          res.status(403).json({
+            error: "Only the reporter or an admin can delete this report",
+          });
           return;
         }
       }
@@ -727,11 +766,9 @@ app.patch(
       if (report.reporterId !== userId) {
         const isUserAdmin = await isAdmin(userId);
         if (!isUserAdmin) {
-          res
-            .status(403)
-            .json({
-              error: "Only the reporter or an admin can update this report",
-            });
+          res.status(403).json({
+            error: "Only the reporter or an admin can update this report",
+          });
           return;
         }
       }
